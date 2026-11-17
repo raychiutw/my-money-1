@@ -63,6 +63,13 @@ _Avoid_: 零用錢 (pocket money)、空閒餘額 (free cash)、閒置資金 (idl
 在新增交易記帳、帳戶互轉、信用卡還款與公帳報銷等表單中，系統嚴格禁止擅自預選任何帳戶或信用卡（無自動預設值），強制使用者主動檢視並選取會計主體；未選取時表單透過原生 required 與介面警示進行防呆攔截。必填欄位之佔位項目設為 disabled 禁止反選回空；非必填之週期收支則提供「無特定帳戶」並允許選取與切換。
 _Avoid_: 隱性預選 (implicit default)、首項默認 (first item auto-select)、自動代入 (auto-fill assumption)
 
+**Recurring Preset Selection (週期項目記帳預設帶入)**:
+在「總覽頁快速記帳」與「收支明細頁新增收支紀錄」之新增模式中（編輯模式不顯示），提供可選之「帶入週期項目」下拉選單作為純表單範本：
+1. **類型過濾與公私帳顯示**：依表單當前選取之「支出 / 收入」類型動態過濾顯示對應週期項目（若該類型無週期項目則隱藏此選單），清單同時包含使用者有權限檢視之個人私帳與家庭公帳週期項目，並標示 `[公帳]`／`[私帳]` 與金額以便辨識。
+2. **嚴格遵守顯式帳戶原則之欄位帶入**：選取週期項目後，僅覆寫帶入該項目之「金額」與「備註（項目名稱）」（並沿用既有備註關鍵字自動推薦分類之邏輯），使用者仍可自由修改；嚴禁連帶預選帳戶，公私帳歸屬與扣款帳戶皆維持手動檢視選取。
+3. **重置與獨立生命週期**：切換回未選取預設選項時保留已填寫之金額與備註不清空；切換支出／收入類型時重置下拉選單為未選取。送出後建立之收支紀錄與週期項目及現金流預測「已繳」狀態各自獨立，不建立自動關聯。
+_Avoid_: 套用週期範本時擅自預選帳戶破壞顯式帳戶原則 (auto-selecting account on recurring preset violating explicit account selection)、將純範本帶入與預測已繳狀態強耦合 (coupling form preset with forecast settled state)
+
 ---
 
 ### 信用卡帳務與結算 (Credit Card Debt & Settlement)
@@ -106,7 +113,7 @@ _Avoid_: 隱藏排除特定分類導致畫面明細與上方總計數字兜不�
      - **起始日**：**上期結帳日隔天（$S_{\text{prev1}} + 1$）**（例如今日 10/17，結帳日 15 號：上期為 9/15，起始日為 `2026-09-16`）。
      - **結束日**：**本月結帳日（$S_{\text{curr}}$）**（例如 `2026-10-15`），即本期已結帳之完整對帳單區間。
      - **彈窗頂部說明**：標示為 `「YYYY-MM-DD ～ YYYY-MM-DD（當月 N 號結帳日已過，結算本期帳單）」`（若當日即結帳日則顯示 `今日為 N 號結帳日，結算本期帳單`）。
-   - **歷史未結交易（上期延入款）一併喚醒、預設列入結算與帳期歸屬保留**：凡早於起始日（即 `date <= prevStatementDate`）但仍未出帳（`is_billed = 0`）或已於本期出帳（`billed_statement_date = statementDate`）之歷史款項，一併納入出帳清單並醒目標示 `[上期延入]`，且打開彈窗時**一律預設列入計算、預設取消勾選延至下期**，杜絕歷史遺漏漏帳與重複開啟時明細消失。
+   - **僅真正勾選延至下期之歷史款項納入上期延入（`defer_to_next_statement = 1`）**：早於起始日（即 `date <= prevStatementDate`）之歷史款項，**僅當其明確標記「延至下期」（`defer_to_next_statement = 1` 且 `is_billed = 0`）或已於本期出帳之原延入款（`billed_statement_date = statementDate`）**時，方納入出帳清單並醒目標示 `[上期延入]`（打開彈窗時一律預設列入計算、預設取消勾選延至下期）。若早於起始日且未勾選延至下期（`defer_to_next_statement = 0`），則**不納入出帳作業清單亦不列入「剩餘未出帳」預估**，並於執行「確認出帳」或手動「校準」時自動標記為已出帳（`is_billed = 1, billed_statement_date = prevStatementDate`），移出未出帳並歸入已出帳待繳款。
    - **全週期明細透視與無狀態依賴**：不論過去是否曾有點擊出帳紀錄，每次打開彈窗皆依上述客觀規則計算區間，不依賴歷史出帳時間戳記推進月份，完整支援重複開啟核對與重新出帳覆蓋。
 2. **四層摘要指標結構與公私帳拆解預覽**：
    - **第一行（主指標）**：`本期出帳淨額 $金額 ({筆數} 筆)`（`= 刷卡金額 - 刷退折抵 = 本期新增 - 本期延後 + 上期延入`，括號為實際列入出帳之總交易筆數）。
@@ -127,7 +134,7 @@ _Avoid_: 盲目累加導致重複點擊出帳金額疊加 (blind incremental bal
 
 **Deferred Statement Billing (延至下期帳單與跨期延入生命週期)**:
 在記錄或編輯信用卡消費、或於出帳作業預覽彈窗中，標記該筆收支延至下個結帳週期再行出帳與沖抵的屬性（`defer_to_next_statement`），適用於商家延遲請款、爭議款或跨期退款。其生命週期嚴格劃分為兩大情境：
-1. **上期延入款 (Prior-Cycle Deferred Item)**：凡交易日期早於或等於上期結帳日（`date <= prevStatementDate`）且尚未出帳（`is_billed = 0`）之歷史款項，或於收支明細手動標記「延至下期」之未出帳消費。進入後續結帳或提前出帳作業時，其商業語意為「遞延至本次出帳」，因此在出帳作業預覽彈窗中**一律預設自動喚醒納入出帳（`is_initially_deferred = false`）**，清單中醒目標示為 `[上期延入]`，金額不劃線並計入出帳淨額；若當期商家依然未請款，持卡人仍可再次點擊「延至下期」繼續順延。
+1. **上期延入款 (Prior-Cycle Deferred Item)**：凡交易日期早於或等於上期結帳日（`date <= prevStatementDate`）且**明確標記「延至下期」（`defer_to_next_statement = 1`）**之未出帳消費（`is_billed = 0`）。進入後續結帳或提前出帳作業時，其商業語意為「遞延至本次出帳」，因此在出帳作業預覽彈窗中**一律預設自動喚醒納入出帳（`is_initially_deferred = false`）**，清單中醒目標示為 `[上期延入]`，金額不劃線並計入出帳淨額；若當期商家依然未請款，持卡人仍可再次點擊「延至下期」繼續順延。反之，早於上期結帳日且未標記延至下期（`defer_to_next_statement = 0`）之歷史未結明細，不列入 `[上期延入]` 亦不納入出帳作業，並於確認出帳或手動校準時自動轉為已出帳（`is_billed = 1`）。
 2. **本期遞延下期款 (Current-Cycle Deferred Item)**：於當期出帳作業預覽中被持卡人勾選「延至下期」之交易（或於當期已出帳作業中被記錄延期者）。當期出帳時排除於出帳淨額外，維持未出帳（`is_billed = 0, defer_to_next_statement = 1`），並於下個結帳週期自動成為「上期延入款」。
 當使用者在收支明細中手動編輯勾選「延至下期帳單」（或將收支日期改至最近結帳日之後）時，系統將該筆收支重置為未出帳（`is_billed = 0`），並同步重算該信用卡之未出帳金額（`unbilled`）。在信用卡未出帳自癒校準（`reconcileCreditCardUnbilled`）中，嚴格維持延期款之 `defer_to_next_statement = 1` 與 `is_billed = 0` 屬性，嚴禁因日期早於基準結帳日而強制覆寫為 `is_billed = 1`。
 _Avoid_: 上期延入款進入本期被持續排除導致永久無法出帳 (perpetually excluding prior-cycle deferred items from current statement)、未到結帳日無法將延期款喚醒出帳 (inability to awaken deferred items before statement day)、校準時強制覆寫延期款為已出帳 (reconciliation forcefully overwriting deferred items to is_billed = 1)、延遲繳款 (delayed payment)、跨期借貸 (cross-period loan)、下期消費 (next cycle expense)
